@@ -138,6 +138,7 @@
       </div>
       <p class="scan-meta" id="scan-meta">还没有扫过，点右上角扫一遍</p>
       <p class="scan-warning hidden" id="scan-warning"></p>
+      <p class="suppressed-tip hidden" id="hit-suppressed-tip"></p>
       <div class="summary hidden" id="scan-summary"></div>
       <div class="table-wrap">
         <table class="grid">
@@ -149,12 +150,66 @@
               <th>文件</th>
               <th>行号</th>
               <th>那一行的内容</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="hit-body"></tbody>
         </table>
       </div>
       <p class="empty-tip hidden" id="hit-empty">这一轮没有命中</p>
+
+      <form class="entry-form hidden" id="ignore-form" autocomplete="off">
+        <h3 id="ignore-form-title">标记忽略</h3>
+        <p class="ignore-target mono" id="ignore-target"></p>
+        <input type="hidden" id="ignore-code">
+        <input type="hidden" id="ignore-path">
+        <input type="hidden" id="ignore-line">
+        <div class="form-row">
+          <label data-field="reason" class="full">忽略理由<input id="ignore-reason" placeholder="为什么这一条可以先留着，例如 老模块下线前保留，已经约定不改" maxlength="200"></label>
+        </div>
+        <div class="form-row">
+          <label data-field="reviewAt">复核期限<input id="ignore-review-at" type="date"></label>
+        </div>
+        <p class="ignore-tip">只压住这一个编码、这个文件、这一行，同规则或同文件的其他命中不受影响；复核期限到期后会在已忽略清单里标出。</p>
+        <div class="form-actions">
+          <button type="submit">确认忽略</button>
+          <button type="button" id="ignore-cancel" class="ghost">取消</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>已忽略的命中</h2>
+        <div class="filters">
+          <label class="inline-filter">
+            <input type="checkbox" id="ignore-filter-overdue"> 只看已到期仍在的
+          </label>
+          <button type="button" id="ignore-refresh" class="ghost">刷新</button>
+        </div>
+      </div>
+      <p class="scan-meta" id="ignore-meta">还没有加载过已忽略清单</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>规则编码</th>
+              <th>级别</th>
+              <th>文件</th>
+              <th>行号</th>
+              <th>那一行的内容</th>
+              <th>忽略理由</th>
+              <th>复核期限</th>
+              <th>标记人</th>
+              <th>标记时间</th>
+              <th>当前状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="ignore-body"></tbody>
+        </table>
+      </div>
+      <p class="empty-tip hidden" id="ignore-empty">还没有被忽略的命中</p>
     </section>
   </main>
 

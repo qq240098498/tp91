@@ -12,6 +12,8 @@ const state = {
   editingRuleId: '',
   editingFileId: '',
   lastScan: null,
+  ignores: [],
+  ignoresToday: '',
 };
 
 const el = (id) => document.getElementById(id);
@@ -379,6 +381,19 @@ function renderScan(result) {
     warningBox.textContent = '';
   }
 
+  // 被忽略的命中没有消失：这一轮还扫得到的条数单独说明，并引导到下面的已忽略清单
+  const suppressedTip = el('hit-suppressed-tip');
+  const overdueCount = result.summary.overdueSuppressed || 0;
+  if (result.summary.suppressed > 0) {
+    suppressedTip.textContent = `这一轮另有 ${result.summary.suppressed} 条命中仍在，但之前已经标成忽略，默认清单里不显示`
+      + (overdueCount > 0 ? `；其中 ${overdueCount} 条已经过了复核期限` : '')
+      + '，可以在下面的“已忽略的命中”里看全。';
+    suppressedTip.classList.remove('hidden');
+  } else {
+    suppressedTip.classList.add('hidden');
+    suppressedTip.textContent = '';
+  }
+
   const summaryBox = el('scan-summary');
   const levelText = Object.keys(result.summary.byLevel)
     .map((key) => `${key} ${result.summary.byLevel[key]} 条`)
@@ -390,11 +405,12 @@ function renderScan(result) {
     .map((item) => `${item.path} ${item.count} 条`)
     .join('　') || '没有文件命中';
   summaryBox.innerHTML = `
-    <div class="summary-line"><strong>一共命中 ${result.summary.total} 条</strong>　${escapeHtml(levelText)}</div>
+    <div class="summary-line"><strong>一共命中 ${result.summary.total} 条</strong>　待处理 ${result.summary.active} 条　已忽略压住 ${result.summary.suppressed} 条　${escapeHtml(levelText)}</div>
     <div class="summary-line">按规则：${escapeHtml(ruleText)}</div>
     <div class="summary-line">按文件：${escapeHtml(fileText)}</div>`;
   summaryBox.classList.remove('hidden');
 
+  // 默认清单只画没被忽略的命中；被压住的那些在已忽略面板里，不会被当成修好了
   const body = el('hit-body');
   body.innerHTML = result.hits.map((hit) => `<tr>
       <td class="mono">${escapeHtml(hit.code)}</td>
@@ -403,8 +419,126 @@ function renderScan(result) {
       <td class="mono">${escapeHtml(hit.path)}</td>
       <td class="mono">${hit.lineNo}</td>
       <td class="mono line-cell">${escapeHtml(hit.lineText)}</td>
+      <td class="actions">
+        <button type="button" class="link"
+          data-hit-ignore="1"
+          data-code="${escapeHtml(hit.code)}"
+          data-path="${escapeHtml(hit.path)}"
+          data-line="${hit.lineNo}">忽略</button>
+      </td>
     </tr>`).join('');
   el('hit-empty').classList.toggle('hidden', result.hits.length > 0);
+}
+
+// ===== 已忽略的命中 =====
+
+async function loadIgnores() {
+  const payload = await request('/api/ignores');
+  state.ignores = payload.ignores || [];
+  state.ignoresToday = payload.today || '';
+  renderIgnores(payload);
+}
+
+function ignoreStatusText(item) {
+  if (!item.stillHit) return { text: '这一处已扫不到（改过或规则已停用）', cls: 'gone' };
+  if (item.overdue) return { text: `仍在，已过复核期限（${item.reviewAt}）`, cls: 'overdue' };
+  if (item.reviewAt) return { text: `仍在，压住中，${item.reviewAt} 前复核`, cls: 'held' };
+  return { text: '仍在，压住中（未设期限）', cls: 'held' };
+}
+
+function renderIgnores(payload) {
+  const onlyOverdue = el('ignore-filter-overdue').checked;
+  const list = onlyOverdue ? state.ignores.filter((item) => item.stillHit && item.overdue) : state.ignores;
+
+  const body = el('ignore-body');
+  body.innerHTML = list.map((item) => {
+    const status = ignoreStatusText(item);
+    return `<tr class="ignore-row ${status.cls}${item.stillHit ? '' : ' gone-row'}">
+      <td class="mono">${escapeHtml(item.code)}</td>
+      <td>${item.level ? `<span class="tag ${levelClass(item.level)}">${escapeHtml(item.level)}</span>` : '—'}</td>
+      <td class="mono">${escapeHtml(item.path)}</td>
+      <td class="mono">${item.lineNo}</td>
+      <td class="mono line-cell">${item.lineText ? escapeHtml(item.lineText) : '（这一轮已扫不到这一行）'}</td>
+      <td class="note-cell">${escapeHtml(item.reason)}</td>
+      <td class="mono">${item.reviewAt ? escapeHtml(item.reviewAt) : '未设期限'}</td>
+      <td>${escapeHtml(item.operator)}</td>
+      <td class="mono">${escapeHtml(formatTime(item.createdAt))}</td>
+      <td><span class="ignore-status ${status.cls}">${escapeHtml(status.text)}</span></td>
+      <td class="actions">
+        <button type="button" class="link danger" data-ignore-cancel="${escapeHtml(item.id)}">取消忽略</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el('ignore-empty').classList.toggle('hidden', list.length > 0);
+  el('ignore-empty').textContent = onlyOverdue && state.ignores.length > 0
+    ? '没有已到期仍在的忽略'
+    : '还没有被忽略的命中';
+
+  const meta = el('ignore-meta');
+  if (payload) {
+    meta.textContent = `共 ${payload.total} 条忽略　其中 ${payload.stillHit} 条此刻仍被压住`
+      + (payload.overdue > 0 ? `　${payload.overdue} 条已过复核期限` : '')
+      + `（今天 ${payload.today}）`;
+  }
+}
+
+function openIgnoreForm(hit) {
+  el('ignore-code').value = hit.code;
+  el('ignore-path').value = hit.path;
+  el('ignore-line').value = hit.line;
+  el('ignore-reason').value = '';
+  el('ignore-review-at').value = '';
+  el('ignore-target').textContent = `${hit.code}　${hit.path}　第 ${hit.line} 行`;
+  el('ignore-form').classList.remove('hidden');
+  el('ignore-reason').focus();
+}
+
+function closeIgnoreForm() {
+  el('ignore-form').classList.add('hidden');
+  clearFieldMarks();
+}
+
+async function submitIgnore(event) {
+  event.preventDefault();
+  clearNotice();
+  clearFieldMarks();
+  const operator = currentOperator();
+  if (!operator) {
+    notify('请先在页面右上角填上当前操作者，再标记忽略', 'error');
+    return;
+  }
+  const payload = {
+    code: el('ignore-code').value,
+    path: el('ignore-path').value,
+    lineNo: el('ignore-line').value,
+    reason: el('ignore-reason').value,
+    reviewAt: el('ignore-review-at').value,
+    operator,
+  };
+  try {
+    await request('/api/ignores', { method: 'POST', body: JSON.stringify(payload) });
+    notify('已标记忽略，下一轮扫描它会出现在已忽略清单里', 'ok');
+    closeIgnoreForm();
+    await runScan();
+    await loadIgnores();
+  } catch (err) {
+    notify(err.message, 'error');
+    markField(err.field);
+  }
+}
+
+async function cancelIgnore(id) {
+  clearNotice();
+  if (!window.confirm('取消忽略后，下一轮扫描这条命中会重新出现在默认清单里，确定吗？')) return;
+  try {
+    await request(`/api/ignores/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    notify('已取消忽略', 'ok');
+    await loadIgnores();
+    if (state.lastScan) await runScan();
+  } catch (err) {
+    notify(err.message, 'error');
+  }
 }
 
 // 列表上的操作用事件委托统一处理，列表重绘之后不需要重新绑定
@@ -463,6 +597,22 @@ document.addEventListener('click', async (event) => {
     } catch (err) {
       notify(err.message, 'error');
     }
+    return;
+  }
+
+  if (node.dataset.hitIgnore) {
+    clearNotice();
+    clearFieldMarks();
+    openIgnoreForm({
+      code: node.dataset.code,
+      path: node.dataset.path,
+      line: node.dataset.line,
+    });
+    return;
+  }
+
+  if (node.dataset.ignoreCancel) {
+    await cancelIgnore(node.dataset.ignoreCancel);
   }
 });
 
@@ -505,6 +655,18 @@ el('file-filter-reset').addEventListener('click', () => {
   loadFiles().catch((err) => notify(err.message, 'error'));
 });
 el('scan-run').addEventListener('click', runScan);
+el('ignore-form').addEventListener('submit', submitIgnore);
+el('ignore-cancel').addEventListener('click', () => {
+  clearNotice();
+  closeIgnoreForm();
+});
+el('ignore-refresh').addEventListener('click', () => {
+  clearNotice();
+  loadIgnores()
+    .then(() => state.lastScan ? runScan() : null)
+    .catch((err) => notify(err.message, 'error'));
+});
+el('ignore-filter-overdue').addEventListener('change', () => renderIgnores(null));
 el('rule-filter-level').addEventListener('change', () => {
   loadRules().catch((err) => notify(err.message, 'error'));
 });
@@ -515,9 +677,10 @@ el('operator').addEventListener('change', () => {
   window.localStorage.setItem(OPERATOR_KEY, currentOperator());
 });
 
-// 页面打开时先把规则与文件都拉一遍，扫描的范围下拉依赖这两份清单
+// 页面打开时先把规则、文件与已忽略清单都拉一遍，扫描的范围下拉依赖前两份清单
 restoreOperator();
 loadHealth();
 loadRules()
   .then(loadFiles)
+  .then(loadIgnores)
   .catch((err) => notify(err.message, 'error'));

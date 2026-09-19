@@ -12,6 +12,8 @@ const MAX_CODE_LENGTH = 20;
 const MAX_RULE_NAME_LENGTH = 40;
 const MAX_PATTERN_LENGTH = 60;
 const MAX_NOTE_LENGTH = 200;
+const MAX_IGNORE_REASON_LENGTH = 200;
+const MAX_OPERATOR_LENGTH = 40;
 const MAX_PATH_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 4000;
 
@@ -335,7 +337,35 @@ function normalizeFile(item, fallbackIndex) {
   };
 }
 
-// 整份数据保证规则与文件结构一致，缺编号、缺名称、缺路径的条目一律丢掉
+// 忽略只精确到某一条命中：规则编码 + 文件路径 + 行号三者完全一致才算同一条，
+// 不会因为忽略一条就连整条规则或整个文件都放过
+function ignoreKeyOf(code, filePath, lineNo) {
+  return `${code}@@${filePath}@@${lineNo}`;
+}
+
+// 把单条忽略整理成固定结构，三个定位字段缺一就丢掉；复核期限保留纯日期文本
+function normalizeIgnore(item, fallbackIndex) {
+  const source = item && typeof item === 'object' ? item : {};
+  const createdAt = typeof source.createdAt === 'string' && source.createdAt ? source.createdAt : new Date().toISOString();
+  const code = typeof source.code === 'string' ? source.code.trim() : '';
+  const filePath = typeof source.path === 'string' ? source.path.trim() : '';
+  const lineNo = Number(source.lineNo);
+  const reason = typeof source.reason === 'string' ? source.reason.trim() : '';
+  const reviewAt = typeof source.reviewAt === 'string' ? source.reviewAt.trim() : '';
+  const operator = typeof source.operator === 'string' ? source.operator.trim() : '';
+  return {
+    id: typeof source.id === 'string' && source.id ? source.id : `ignore-restored-${fallbackIndex + 1}`,
+    code,
+    path: filePath,
+    lineNo: Number.isInteger(lineNo) && lineNo > 0 ? lineNo : 0,
+    reason,
+    reviewAt,
+    operator,
+    createdAt,
+  };
+}
+
+// 整份数据保证规则、文件与忽略三块结构一致，定位不全或重复的忽略一律丢掉
 function normalize(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const seed = { rules: seedRules(), files: seedFiles() };
@@ -368,7 +398,21 @@ function normalize(raw) {
     files.push(file);
   });
 
-  return { rules, files };
+  const rawIgnores = Array.isArray(source.ignores) ? source.ignores : [];
+  const seenIgnoreIds = new Set();
+  const seenIgnoreKeys = new Set();
+  const ignores = [];
+  rawIgnores.forEach((item, index) => {
+    const ignore = normalizeIgnore(item, index);
+    if (!ignore.id || !ignore.code || !ignore.path || !ignore.lineNo || !ignore.reason) return;
+    const dedupe = ignoreKeyOf(ignore.code, ignore.path, ignore.lineNo);
+    if (seenIgnoreIds.has(ignore.id) || seenIgnoreKeys.has(dedupe)) return;
+    seenIgnoreIds.add(ignore.id);
+    seenIgnoreKeys.add(dedupe);
+    ignores.push(ignore);
+  });
+
+  return { rules, files, ignores };
 }
 
 // 读取数据文件：文件缺失或内容损坏时回落到初始数据并立刻补写
@@ -377,7 +421,7 @@ function load() {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     return normalize(JSON.parse(raw));
   } catch (err) {
-    const data = { rules: seedRules(), files: seedFiles() };
+    const data = { rules: seedRules(), files: seedFiles(), ignores: [] };
     save(data);
     return data;
   }
@@ -399,6 +443,8 @@ module.exports = {
   normalize,
   normalizeRule,
   normalizeFile,
+  normalizeIgnore,
+  ignoreKeyOf,
   LEVELS,
   STATUSES,
   FILE_TYPES,
@@ -406,6 +452,8 @@ module.exports = {
   MAX_RULE_NAME_LENGTH,
   MAX_PATTERN_LENGTH,
   MAX_NOTE_LENGTH,
+  MAX_IGNORE_REASON_LENGTH,
+  MAX_OPERATOR_LENGTH,
   MAX_PATH_LENGTH,
   MAX_CONTENT_LENGTH,
   DATA_FILE,
