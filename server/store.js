@@ -14,6 +14,8 @@ const MAX_PATTERN_LENGTH = 60;
 const MAX_NOTE_LENGTH = 200;
 const MAX_PATH_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 4000;
+const MAX_IGNORE_REASON_LENGTH = 200;
+const MAX_OPERATOR_LENGTH = 40;
 
 // 检查规则的初始数据。十二条规则里有两条是停用的，
 // 有一条启用的规则在现有文件里一条命中都没有，用来观察从未命中的规则
@@ -335,7 +337,32 @@ function normalizeFile(item, fallbackIndex) {
   };
 }
 
-// 整份数据保证规则与文件结构一致，缺编号、缺名称、缺路径的条目一律丢掉
+// 把单条忽略记录整理成固定结构。忽略的范围精确到规则编码、文件路径与行号，
+// 撤销的记录保留下来备查，活动记录之间不允许占同一个位置
+function normalizeIgnore(item, fallbackIndex) {
+  const source = item && typeof item === 'object' ? item : {};
+  const createdAt = typeof source.createdAt === 'string' && source.createdAt ? source.createdAt : new Date().toISOString();
+  const code = typeof source.code === 'string' ? source.code.trim() : '';
+  const filePath = typeof source.path === 'string' ? source.path.trim() : '';
+  const lineNo = Number(source.lineNo);
+  const revokedAt = typeof source.revokedAt === 'string' && source.revokedAt ? source.revokedAt : '';
+  return {
+    id: typeof source.id === 'string' && source.id ? source.id : `ignore-restored-${fallbackIndex + 1}`,
+    code,
+    path: filePath,
+    lineNo: Number.isInteger(lineNo) && lineNo > 0 ? lineNo : 0,
+    reason: typeof source.reason === 'string' ? source.reason.trim() : '',
+    reviewDate: typeof source.reviewDate === 'string' ? source.reviewDate.trim() : '',
+    operator: typeof source.operator === 'string' ? source.operator.trim() : '',
+    createdAt,
+    revokedAt,
+    revokedBy: typeof source.revokedBy === 'string' ? source.revokedBy.trim() : '',
+    lastSeenAt: typeof source.lastSeenAt === 'string' && source.lastSeenAt ? source.lastSeenAt : '',
+    lastLineText: typeof source.lastLineText === 'string' ? source.lastLineText : '',
+  };
+}
+
+// 整份数据保证规则、文件与忽略记录结构一致，缺编号、缺名称、缺路径的条目一律丢掉
 function normalize(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const seed = { rules: seedRules(), files: seedFiles() };
@@ -368,7 +395,25 @@ function normalize(raw) {
     files.push(file);
   });
 
-  return { rules, files };
+  const rawIgnores = Array.isArray(source.ignores) ? source.ignores : [];
+  const seenIgnoreIds = new Set();
+  const seenActiveSpots = new Set();
+  const ignores = [];
+  rawIgnores.forEach((item, index) => {
+    const ignore = normalizeIgnore(item, index);
+    if (!ignore.id || !ignore.code || !ignore.path || !ignore.lineNo) return;
+    if (seenIgnoreIds.has(ignore.id)) return;
+    seenIgnoreIds.add(ignore.id);
+    // 同一个位置只留一条活动记录；已经撤销的记录只是备查，不占位置
+    if (!ignore.revokedAt) {
+      const spot = `${ignore.code.toLowerCase()}|${ignore.path.toLowerCase()}|${ignore.lineNo}`;
+      if (seenActiveSpots.has(spot)) return;
+      seenActiveSpots.add(spot);
+    }
+    ignores.push(ignore);
+  });
+
+  return { rules, files, ignores };
 }
 
 // 读取数据文件：文件缺失或内容损坏时回落到初始数据并立刻补写
@@ -377,7 +422,7 @@ function load() {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     return normalize(JSON.parse(raw));
   } catch (err) {
-    const data = { rules: seedRules(), files: seedFiles() };
+    const data = { rules: seedRules(), files: seedFiles(), ignores: [] };
     save(data);
     return data;
   }
@@ -399,6 +444,7 @@ module.exports = {
   normalize,
   normalizeRule,
   normalizeFile,
+  normalizeIgnore,
   LEVELS,
   STATUSES,
   FILE_TYPES,
@@ -408,5 +454,7 @@ module.exports = {
   MAX_NOTE_LENGTH,
   MAX_PATH_LENGTH,
   MAX_CONTENT_LENGTH,
+  MAX_IGNORE_REASON_LENGTH,
+  MAX_OPERATOR_LENGTH,
   DATA_FILE,
 };

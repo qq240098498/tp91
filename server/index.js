@@ -93,6 +93,32 @@ app.delete('/api/files/:id', (req, res) => {
   }
 });
 
+// 已忽略清单：生效中的、已撤销的都能翻，理由、期限、标记人与标记时间都留着
+app.get('/api/ignores', (req, res) => {
+  res.json(api.listIgnores({
+    scope: api.readQuery(req.query, 'scope'),
+    keyword: api.readQuery(req.query, 'keyword'),
+  }));
+});
+
+// 对某一条命中标忽略：范围只到规则编码、文件路径与行号这一处
+app.post('/api/ignores', (req, res) => {
+  try {
+    res.status(201).json(api.createIgnore(req.body));
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 撤销某条忽略，记录保留下来备查
+app.delete('/api/ignores/:id', (req, res) => {
+  try {
+    res.json(api.revokeIgnore(req.params.id, req.body));
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 // 扫一遍：可以只扫某一条规则、某一个文件，也可以只留某个级别
 app.post('/api/scan', (req, res) => {
   try {

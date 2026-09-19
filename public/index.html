@@ -149,12 +149,90 @@
               <th>文件</th>
               <th>行号</th>
               <th>那一行的内容</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="hit-body"></tbody>
         </table>
       </div>
-      <p class="empty-tip hidden" id="hit-empty">这一轮没有命中</p>
+      <p class="empty-tip hidden" id="hit-empty">这一轮没有需要处理的命中（已忽略的在下面单独列着）</p>
+
+      <div class="suppressed-block hidden" id="suppressed-block">
+        <h3>被忽略压住的命中（问题还在，不是修好了）</h3>
+        <p class="suppressed-tip" id="suppressed-tip"></p>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>规则编码</th>
+                <th>级别</th>
+                <th>文件</th>
+                <th>行号</th>
+                <th>那一行的内容</th>
+                <th>忽略理由</th>
+                <th>复核期限</th>
+                <th>标记人</th>
+              </tr>
+            </thead>
+            <tbody id="suppressed-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <form class="entry-form hidden" id="ignore-form" autocomplete="off">
+        <h3 id="ignore-form-title">标记忽略</h3>
+        <p class="ignore-target mono" id="ignore-target"></p>
+        <div class="form-row">
+          <label class="full" data-field="reason">忽略理由（必填）<input id="ignore-reason" placeholder="为什么这一处可以先放过，例如：随旧模块一起下线，见工单 OPS-12" maxlength="200"></label>
+        </div>
+        <div class="form-row">
+          <label data-field="reviewDate">复核期限（必填）<input id="ignore-review-date" type="date"></label>
+        </div>
+        <p class="form-hint">忽略只压住这一条命中：规则编码、文件路径与行号完全相同的位置；同一规则、同一文件的其他命中不受影响。到期后不会自动恢复，只会在清单里标出已到期。</p>
+        <div class="form-actions">
+          <button type="submit">确认忽略这一条</button>
+          <button type="button" id="ignore-cancel" class="ghost">取消</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>已忽略的命中</h2>
+        <div class="filters">
+          <select id="ignore-scope">
+            <option value="active">生效中</option>
+            <option value="revoked">已撤销</option>
+            <option value="all">全部记录</option>
+          </select>
+          <input id="ignore-filter-keyword" placeholder="搜索编码、路径、理由、标记人" maxlength="40">
+          <button type="button" id="ignore-filter-apply">筛选</button>
+          <button type="button" id="ignore-refresh" class="ghost">刷新</button>
+        </div>
+      </div>
+      <p class="scan-meta" id="ignore-counts">还没有载入已忽略清单</p>
+      <div class="table-wrap">
+        <table class="grid ignore-grid">
+          <thead>
+            <tr>
+              <th>规则编码</th>
+              <th>级别</th>
+              <th>规则名称</th>
+              <th>文件</th>
+              <th>行号</th>
+              <th>当前状态</th>
+              <th>那一行的内容</th>
+              <th>忽略理由</th>
+              <th>复核期限</th>
+              <th>标记人 / 时间</th>
+              <th>最近扫到</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="ignore-body"></tbody>
+        </table>
+      </div>
+      <p class="empty-tip hidden" id="ignore-empty">这里还没有忽略记录</p>
     </section>
   </main>
 

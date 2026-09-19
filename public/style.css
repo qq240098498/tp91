@@ -383,3 +383,91 @@ label.full input {
   display: flex;
   gap: 10px;
 }
+
+/* 被忽略压住的命中与已忽略清单 */
+.suppressed-block {
+  margin-top: 14px;
+  padding: 12px 12px 6px;
+  border: 1px solid var(--warn-line);
+  border-radius: 6px;
+  background: #fffcf4;
+}
+
+.suppressed-block h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+.suppressed-tip {
+  margin: 0 0 8px;
+  color: #8a5a00;
+  font-size: 12.5px;
+}
+
+tr.row-suppressed td {
+  background: #fffaf0;
+  color: var(--ink-soft);
+}
+
+tr.row-overdue td {
+  background: #fdf3f3;
+}
+
+tr.row-revoked td {
+  color: var(--ink-soft);
+}
+
+.ignore-target {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #f9fafc;
+  font-size: 12.5px;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.form-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.badge-status.is-there {
+  background: #fff0d6;
+  color: #8a5a00;
+}
+
+.badge-status.is-gone {
+  background: #e7f3ec;
+  color: var(--ok);
+}
+
+.badge-status.is-revoked {
+  background: var(--line);
+  color: var(--ink-soft);
+}
+
+.badge-overdue {
+  background: #fdeeee;
+  color: var(--danger);
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.ignore-grid {
+  min-width: 1280px;
+}
